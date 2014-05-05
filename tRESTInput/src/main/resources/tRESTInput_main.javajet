@@ -1,0 +1,507 @@
+<%@ jet 
+	imports="
+		org.talend.core.model.process.INode 
+		org.talend.core.model.process.ElementParameterParser 
+		org.talend.core.model.metadata.IMetadataTable 
+		org.talend.core.model.metadata.IMetadataColumn 
+		org.talend.core.model.process.IConnection
+		org.talend.core.model.process.IConnectionCategory
+		org.talend.designer.codegen.config.CodeGeneratorArgument
+		org.talend.core.model.metadata.types.JavaTypesManager
+		org.talend.core.model.metadata.types.JavaType
+		java.util.List
+		java.util.ArrayList 
+    	java.util.Map
+    	java.net.InetAddress
+    	java.net.UnknownHostException
+    	
+	" 
+%>
+<% 
+    CodeGeneratorArgument codeGenArgument = (CodeGeneratorArgument) argument;
+    INode node = (INode)codeGenArgument.getArgument();
+    String cid = node.getUniqueName();
+    
+// Basic parameters
+    String httpMethod = ElementParameterParser.getValue(node,"__HTTP_METHOD__");
+    String serviceURI = ElementParameterParser.getValue(node,"__URI__");
+	boolean outputToFile = ("true").equals(ElementParameterParser.getValue(node,"__OUTPUT_TO_FILE__"));
+    String outputFile = ElementParameterParser.getValue(node,"__OUTPUT_FILE__");
+    String contentEncoding = ElementParameterParser.getValue(node,"__CONTENT_ENCODING__");
+    boolean forceMultipart = ("true").equals(ElementParameterParser.getValue(node,"__MULTIPART_FORMDATA__"));
+    
+    boolean useExistingConnection = ("true").equals(ElementParameterParser.getValue(node,"__USE_EXISTING_CONNECTION__"));
+    String connection = ElementParameterParser.getValue(node,"__CONNECTION__");
+    String conn = "httpconn_" + connection;
+    String httpContext = "httpcontext_" + connection;
+    
+    boolean hasHeaders = ("true").equals(ElementParameterParser.getValue(node,"__HAS_HEADERS__"));
+    List<Map<String, String>> httpHeaders = (List<Map<String,String>>)ElementParameterParser.getObjectValue(node, "__HTTP_HEADERS__");
+
+    boolean hasRawContent = ("true").equals(ElementParameterParser.getValue(node,"__HAS_RAWCONTENT__"));
+    String rawContentMimetype = ElementParameterParser.getValue(node, "__RAWCONTENT_MIMETYPE__");
+    String rawContentFilename = ElementParameterParser.getValue(node, "__RAWCONTENT_FILE__");
+    String rawContent = ElementParameterParser.getValue(node, "__RAWCONTENT__");
+
+    boolean hasParameters = ("true").equals(ElementParameterParser.getValue(node,"__HAS_PARAMS__"));
+    List<Map<String, String>> httpParameters = (List<Map<String,String>>)ElementParameterParser.getObjectValue(node, "__HTTP_PARAMS__");
+
+    boolean hasFiles = ("true").equals(ElementParameterParser.getValue(node,"__HAS_FILES__"));
+    List<Map<String, String>> httpFiles = (List<Map<String,String>>)ElementParameterParser.getObjectValue(node, "__HTTP_FILES__");
+
+	boolean dieOnError = ("true").equals(ElementParameterParser.getValue(node,"__DIE_ON_ERROR__"));
+
+// Extended parameters
+    String timeoutStr = ElementParameterParser.getValue(node,"__TIMEOUT__");
+	Integer timeout = Integer.valueOf(2000);
+	try {
+    	timeout = Integer.parseInt(timeoutStr);
+    } catch (NumberFormatException e) {
+    	timeout = Integer.valueOf(2000);
+    }
+	
+	boolean followRedirect = ("true").equals(ElementParameterParser.getValue(node,"__FOLLOW_REDIRECT__"));
+    
+    boolean needAuth = ("true").equals(ElementParameterParser.getValue(node,"__NEED_AUTH__"));
+    String username = ElementParameterParser.getValue(node,"__AUTH_USERNAME__");
+    String password = ElementParameterParser.getValue(node,"__AUTH_PASSWORD__");
+    String realm = ElementParameterParser.getValue(node,"__AUTH_REALM__");
+    realm = ((realm == null) || realm.isEmpty() || "\"\"".equals(realm)) ? null : realm;
+    
+    boolean useProxy = ("true").equals(ElementParameterParser.getValue(node,"__USE_PROXY__"));
+    String proxyHost = ElementParameterParser.getValue(node,"__PROXY_HOST__");
+    String proxyPortStr = ElementParameterParser.getValue(node,"__PROXY_PORT__");
+    int proxyPort = -1;
+    try {
+    	proxyPort = Integer.parseInt(proxyPortStr);
+    } catch (NumberFormatException e) {
+    	proxyPort = -1;
+    }
+    String proxyUser = ElementParameterParser.getValue(node,"__PROXY_USERNAME__");
+    String proxyPassword = ElementParameterParser.getValue(node,"__PROXY_PASSWORD__");
+    boolean proxyNTLM = ("true").equals(ElementParameterParser.getValue(node,"__PROXY_NTLM__"));
+    String proxyWorkstation = ElementParameterParser.getValue(node,"__PROXY_WORKSTATION__");
+    if ((proxyWorkstation == null) || proxyWorkstation.isEmpty() || "\"\"".equals(proxyWorkstation)) {
+    	try {
+    		InetAddress addr = InetAddress.getLocalHost();
+    		proxyWorkstation = new StringBuilder().append("\"").append(addr.getHostName()).append("\"").toString();
+    	} catch (UnknownHostException e) {
+    		proxyWorkstation = "\"\"";
+    	} 
+    }
+    String proxyDomain = ElementParameterParser.getValue(node,"__PROXY_DOMAIN__");
+    
+    boolean needTrustStore = ("true").equals(ElementParameterParser.getValue(node,"__NEED_TRUSTSTORE__"));
+    String trustStoreType = ElementParameterParser.getValue(node,"__SSL_TRUSTSTORE_TYPE__");
+    String trustStoreFilename = ElementParameterParser.getValue(node,"__SSL_TRUSTSTORE__");
+    String trustStorePassword = ElementParameterParser.getValue(node,"__SSL_TRUSTSTORE_PASSWORD__");
+
+// HTTP protocole parameters (NOT request parameters)
+	if (!useExistingConnection) {
+%>
+org.apache.http.params.BasicHttpParams aHttpParams<%=cid%> = new org.apache.http.params.BasicHttpParams();
+aHttpParams<%=cid%>.setParameter(org.apache.http.client.params.AllClientPNames.CONNECTION_TIMEOUT, <%=timeout%>);
+aHttpParams<%=cid%>.setBooleanParameter(org.apache.http.client.params.AllClientPNames.HANDLE_REDIRECTS, <%=followRedirect%>);
+
+<%
+// Proxy
+		if (useProxy) {
+%>
+org.apache.http.HttpHost aProxy<%=cid%> = new org.apache.http.HttpHost(<%=proxyHost%>, <%=proxyPort%>);
+aHttpParams<%=cid%>.setParameter(org.apache.http.client.params.AllClientPNames.DEFAULT_PROXY, aProxy<%=cid%>);
+<%
+		}
+	}
+
+// URI parameters
+%>
+java.net.URI aURI<%=cid%> = new java.net.URI(<%=serviceURI%>);
+
+java.util.List<org.apache.http.NameValuePair> aURIParams<%=cid%> = new java.util.ArrayList<org.apache.http.NameValuePair>();
+aURIParams<%=cid%>.addAll(org.apache.http.client.utils.URLEncodedUtils.parse(aURI<%=cid%>, <%=contentEncoding%>));
+java.util.List<org.apache.http.NameValuePair> aRequestParams<%=cid%> = new java.util.ArrayList<org.apache.http.NameValuePair>();
+
+<%
+	if (hasParameters) {
+		for (int i = 0; i < httpParameters.size(); i++) {
+			Map<String, String> aHttpParameter = httpParameters.get(i);
+			if ("true".equals(aHttpParameter.get("HTTP_PARAMS_URL"))) {
+%>
+aURIParams<%=cid%>.add(new org.apache.http.message.BasicNameValuePair(<%=aHttpParameter.get("HTTP_PARAMS_NAME")%>,
+<%
+				if ("false".equals(aHttpParameter.get("HTTP_PARAMS_ENCODE"))) {
+%>
+java.net.URLDecoder.decode(<%=aHttpParameter.get("HTTP_PARAMS_VALUE")%>, <%=contentEncoding%>)
+<%
+				} else {
+%>
+<%=aHttpParameter.get("HTTP_PARAMS_VALUE")%>
+<%
+				}
+%>
+));
+<%
+			}
+			if ("true".equals(aHttpParameter.get("HTTP_PARAMS_FORM"))
+			     && ("POST".equals(httpMethod) || "PUT".equals(httpMethod))
+			     && !hasRawContent
+			   ) {
+%>
+aRequestParams<%=cid%>.add(new org.apache.http.message.BasicNameValuePair(<%=aHttpParameter.get("HTTP_PARAMS_NAME")%>,
+<%
+				if ("false".equals(aHttpParameter.get("HTTP_PARAMS_ENCODE")) && !(hasFiles && (httpFiles.size() > 0))) {
+%>
+java.net.URLDecoder.decode(<%=aHttpParameter.get("HTTP_PARAMS_VALUE")%>, <%=contentEncoding%>)
+<%
+				} else if ("true".equals(aHttpParameter.get("HTTP_PARAMS_ENCODE")) && (hasFiles && (httpFiles.size() > 0))) {
+%>
+java.net.URLEncoder.encode(<%=aHttpParameter.get("HTTP_PARAMS_VALUE")%>, <%=contentEncoding%>)
+<%
+				} else {
+%>
+<%=aHttpParameter.get("HTTP_PARAMS_VALUE")%>
+<%
+				}
+%>
+));
+<%
+			}
+		}
+
+		if (httpParameters.size() > 0) {
+		// URI parameters are merged
+%>
+	System.out.println(aURIParams<%=cid%>);
+	
+//	               aURI<%=cid%>.getUserInfo(), 
+	aURI<%=cid%> = org.apache.http.client.utils.URIUtils.createURI(aURI<%=cid%>.getScheme(), 
+		aURI<%=cid%>.getHost(), 
+        aURI<%=cid%>.getPort(), 
+        aURI<%=cid%>.getRawPath(), 
+        aURIParams<%=cid%>.isEmpty() ? null : org.apache.http.client.utils.URLEncodedUtils.format(aURIParams<%=cid%>, <%=contentEncoding%>), 
+        aURI<%=cid%>.getFragment());
+	
+	System.out.println(aURI<%=cid%>.toString());
+	
+<%
+		}
+	}
+
+// HTTP Client
+%>
+
+
+<%
+	if (useExistingConnection) {
+%>
+    org.apache.http.protocol.HttpContext aLocalContext<%=cid%> = (org.apache.http.protocol.HttpContext)globalMap.get("<%=httpContext%>");
+    org.apache.http.impl.client.DefaultHttpClient aHttpclient<%=cid%> = (org.apache.http.impl.client.DefaultHttpClient)globalMap.get("<%=conn%>");
+<%
+     } else {
+%>
+    org.apache.http.protocol.HttpContext aLocalContext<%=cid%> = new org.apache.http.protocol.BasicHttpContext();
+    org.apache.http.impl.client.DefaultHttpClient aHttpclient<%=cid%> = new org.apache.http.impl.client.DefaultHttpClient(aHttpParams<%=cid%>);
+<%
+	}
+
+// SSL TrustStore
+	if (!useExistingConnection && needTrustStore) {
+%>
+
+	java.security.KeyStore trustStore<%=cid%>  = java.security.KeyStore.getInstance("<%=trustStoreType%>");
+<%
+		if (!trustStoreType.startsWith("Windows-")) {
+%>
+	java.io.FileInputStream trustStoreInstream<%=cid%> = new java.io.FileInputStream(new java.io.File(<%=trustStoreFilename%>)); 
+	try {
+		trustStore<%=cid%>.load(trustStoreInstream<%=cid%>, <%=trustStorePassword%>.toCharArray());
+	} catch (IOException ioe) {
+		// Fall back to default TrustStore
+		System.out.println("Cannot load TrustStore");
+	} finally {
+		trustStoreInstream<%=cid%>.close();
+	}
+<%
+		} else {
+%>
+	trustStore<%=cid%>.load(null, null);
+<%
+		}
+%>
+	org.apache.http.conn.ssl.SSLSocketFactory socketFactory<%=cid%> = new org.apache.http.conn.ssl.SSLSocketFactory(trustStore<%=cid%>);
+	org.apache.http.conn.scheme.Scheme sch<%=cid%> = new org.apache.http.conn.scheme.Scheme("https", socketFactory<%=cid%>, 443);
+	aHttpclient<%=cid%>.getConnectionManager().getSchemeRegistry().register(sch<%=cid%>);
+<%
+	}
+
+	if (!useExistingConnection && (useProxy && (proxyUser != null) && !proxyUser.isEmpty())) {
+	// Proxy credentials
+		if (proxyNTLM) {
+%>
+	org.apache.http.auth.Credentials aProxyCredentials<%=cid%> = new org.apache.http.auth.NTCredentials(<%=proxyUser%>, <%=proxyPassword%>, <%=proxyWorkstation%>, <%=proxyDomain%>);
+<%
+		} else {
+%>
+	org.apache.http.auth.Credentials aProxyCredentials<%=cid%> = new org.apache.http.auth.UsernamePasswordCredentials(<%=proxyUser%>, <%=proxyPassword%>);
+<%
+		}
+%>
+	aHttpclient<%=cid%>.getCredentialsProvider().setCredentials(new org.apache.http.auth.AuthScope(<%=proxyHost%>, <%=proxyPort%>), aProxyCredentials<%=cid%>);
+<%
+	}
+
+// Authentication
+	if (needAuth) {
+%>
+		// Credentials
+		
+		org.apache.http.auth.Credentials aCredentials<%=cid%> = new org.apache.http.auth.UsernamePasswordCredentials(<%=username%>, <%=password%>);
+		aHttpclient<%=cid%>.getCredentialsProvider().setCredentials(new org.apache.http.auth.AuthScope(aURI<%=cid%>.getHost(), aURI<%=cid%>.getPort(), <%=realm%>), aCredentials<%=cid%>);
+<%
+	}
+
+// Request
+%>
+
+try {
+	org.apache.http.client.methods.HttpRequestBase aHttpRequest<%=cid%> = null;
+	org.apache.http.HttpResponse aResponse<%=cid%> = null;
+<%
+	if ("POST".equals(httpMethod) || "PUT".equals(httpMethod)) {
+		// Entities
+%>
+	org.apache.http.HttpEntity aRawContentEntity<%=cid%> = null;
+	org.apache.http.HttpEntity aFormContentEntity<%=cid%> = null;
+	
+<%
+		if (hasRawContent) {
+			// Raw content overrides form data
+%>
+		java.io.File aRawContentFile<%=cid%> = <% if ((rawContentFilename == null) || rawContentFilename.isEmpty()) { %>null<% } else { %>new java.io.File(<%=rawContentFilename%>)<% }; %>;
+		if ((aRawContentFile<%=cid%> != null) && aRawContentFile<%=cid%>.exists()) {
+			aRawContentEntity<%=cid%> = new org.apache.http.entity.FileEntity(aRawContentFile<%=cid%>, <%=rawContentMimetype%>);
+		} else {
+			aRawContentEntity<%=cid%> = new org.apache.http.entity.StringEntity(<%=rawContent%>, <%=rawContentMimetype%>, <%=contentEncoding%>);
+		}
+<%
+		}
+	
+		if ("POST".equals(httpMethod)) {
+			if (hasParameters || hasFiles) {
+				if (forceMultipart || (hasFiles && (httpFiles.size() > 0))) {
+					// Files and form data are assembled into a multipart container
+%>
+		org.apache.http.entity.mime.MultipartEntity aMPartEntity<%=cid%> = new org.apache.http.entity.mime.MultipartEntity(org.apache.http.entity.mime.HttpMultipartMode.STRICT, null, java.nio.charset.Charset.forName(<%=contentEncoding%>));
+		for(org.apache.http.NameValuePair aParam<%=cid%> : aRequestParams<%=cid%>) {
+			aMPartEntity<%=cid%>.addPart(aParam<%=cid%>.getName(), new org.apache.http.entity.mime.content.StringBody(aParam<%=cid%>.getValue(), "text/plain", java.nio.charset.Charset.forName(<%=contentEncoding%>)));
+		}
+<%
+					if (hasFiles) {
+						for(Map<String, String> aFileRecord : httpFiles) {
+%>
+		aMPartEntity<%=cid%>.addPart(<%=aFileRecord.get("HTTP_FILES_PARAM")%>, new org.apache.http.entity.mime.content.FileBody(new java.io.File(<%=aFileRecord.get("HTTP_FILES_PATH")%>), <%=aFileRecord.get("HTTP_FILES_MIMETYPE")%>));
+<%
+						}
+					}
+%>
+		aFormContentEntity<%=cid%> = aMPartEntity<%=cid%>;		
+<%
+				} else if (hasParameters && (httpParameters.size() > 0)) {
+					// Form data are simply encoded into the body
+%>
+		aFormContentEntity<%=cid%> = new org.apache.http.client.entity.UrlEncodedFormEntity(aRequestParams<%=cid%>, <%=contentEncoding%>);
+<%
+				}
+			}
+		}
+	}
+
+	if ("GET".equals(httpMethod)) {
+%>
+	    aHttpRequest<%=cid%> = new org.apache.http.client.methods.HttpGet(aURI<%=cid%>);
+<%
+	} else if ("POST".equals(httpMethod)) {
+%>
+		org.apache.http.client.methods.HttpPost aHttpPost<%=cid%> = new org.apache.http.client.methods.HttpPost(aURI<%=cid%>);
+<%
+		if (hasRawContent) {
+%>
+		aHttpPost<%=cid%>.setEntity(aRawContentEntity<%=cid%>);
+<%
+		} else if (hasParameters) {
+%>
+		aHttpPost<%=cid%>.setEntity(aFormContentEntity<%=cid%>);
+<%
+		}
+%>
+		aHttpRequest<%=cid%> = aHttpPost<%=cid%>;
+<%
+	} else if ("PUT".equals(httpMethod)) {
+%>
+		org.apache.http.client.methods.HttpPut aHttpPut<%=cid%> = new org.apache.http.client.methods.HttpPut(aURI<%=cid%>);
+<%
+		if (hasRawContent) {
+%>
+		aHttpPut<%=cid%>.setEntity(aRawContentEntity<%=cid%>);
+<%
+		} else if (hasParameters) {
+%>
+		aHttpPut<%=cid%>.setEntity(aFormContentEntity<%=cid%>);
+<%
+		}
+%>
+		aHttpRequest<%=cid%> = aHttpPut<%=cid%>;
+<%
+	} else if ("DELETE".equals(httpMethod)) {
+%>
+		aHttpRequest<%=cid%> = new org.apache.http.client.methods.HttpDelete(aURI<%=cid%>);
+<%
+	} else if ("HEAD".equals(httpMethod)) {
+%>
+		aHttpRequest<%=cid%> = new org.apache.http.client.methods.HttpHead(aURI<%=cid%>);
+<%
+	} else if ("OPTIONS".equals(httpMethod)) {
+%>
+		aHttpRequest<%=cid%> = new org.apache.http.client.methods.HttpOptions(aURI<%=cid%>);
+<%
+	} else if ("TRACE".equals(httpMethod)) {
+%>
+		aHttpRequest<%=cid%> = new org.apache.http.client.methods.HttpTrace(aURI<%=cid%>);
+<%
+	}
+
+// Headers
+	if (hasHeaders && (httpHeaders.size() > 0)) {
+		for (int i = 0; i < httpHeaders.size(); i++) {
+			Map<String, String> aHttpHeader = httpHeaders.get(i);
+%>
+aHttpRequest<%=cid%>.addHeader(<%=aHttpHeader.get("HTTP_HEADERS_NAME")%>, <%=aHttpHeader.get("HTTP_HEADERS_VALUE")%>);
+<%
+		}
+	}
+
+// Send the request
+%>
+	aResponse<%=cid%> = aHttpclient<%=cid%>.execute(aHttpRequest<%=cid%>, aLocalContext<%=cid%>);
+
+    if (aResponse<%=cid%> != null) {
+    	java.util.List<org.apache.http.Header> aHeadersList = java.util.Arrays.asList(aResponse<%=cid%>.getAllHeaders());
+		String aStatusLine = aResponse<%=cid%>.getStatusLine().toString();
+		int aStatusCode = aResponse<%=cid%>.getStatusLine().getStatusCode();
+		
+		org.apache.http.HttpEntity aEntity<%=cid%> = null;
+<%
+		if (outputToFile) {
+%>
+		String aOutputFilename = null;
+<%
+		} else {
+%>
+		String aBody = null;
+<%
+		}
+%>
+		
+		aEntity<%=cid%> = aResponse<%=cid%>.getEntity();
+
+		if (aEntity<%=cid%> != null) {
+<%
+		if (outputToFile) {
+%>
+			aOutputFilename = <%=outputFile%>;
+	    	java.io.FileOutputStream aOutputStream<%=cid%> = new java.io.FileOutputStream(aOutputFilename);
+	    	aEntity<%=cid%>.writeTo(aOutputStream<%=cid%>);
+<%
+		} else {
+%>
+			aBody = org.apache.http.util.EntityUtils.toString(aResponse<%=cid%>.getEntity());
+<%
+		}
+%>
+	    }
+	    
+	    org.apache.http.HttpHost aTarget = (org.apache.http.HttpHost) aLocalContext<%=cid%>.getAttribute(org.apache.http.protocol.ExecutionContext.HTTP_TARGET_HOST);
+	    java.net.URI aTargetURI = new java.net.URI(aTarget.toURI());
+	    String aRedirectURI = null;
+		try {
+			org.apache.http.client.methods.HttpUriRequest aURIRequest = (org.apache.http.client.methods.HttpUriRequest) aLocalContext<%=cid%>.getAttribute(org.apache.http.protocol.ExecutionContext.HTTP_REQUEST);
+			aRedirectURI = aTargetURI.resolve(aURIRequest.getURI()).toString();
+		} catch (ClassCastException e) {
+			aRedirectURI = aTargetURI.toString();
+		}
+
+<%
+	boolean hasOutgoingConnection = false;
+	List<? extends IConnection> outgoingConns = node.getOutgoingSortedConnections();
+	if ((outgoingConns != null) && (outgoingConns.size() > 0)) {
+		IConnection outgoingConn = outgoingConns.get(0);
+		if (outgoingConn.getLineStyle().hasConnectionCategory(IConnectionCategory.DATA)) {
+			hasOutgoingConnection = true;
+%>		
+			<%=outgoingConn.getName() %> = new <%=outgoingConn.getName() %>Struct();
+			<%=outgoingConn.getName() %>.URI = aURI<%=cid%>.toString();
+			<%=outgoingConn.getName() %>.REDIRECT_URI = aRedirectURI;
+			<%=outgoingConn.getName() %>.STATUS_CODE = aStatusCode;
+			<%=outgoingConn.getName() %>.STATUS_LINE = aStatusLine;
+			<%=outgoingConn.getName() %>.HEADERS = aHeadersList;
+<%
+			if (outputToFile) {
+%>
+			<%=outgoingConn.getName() %>.FILENAME = aOutputFilename;
+<%
+			} else {
+%>
+			<%=outgoingConn.getName() %>.BODY = aBody;
+<%			
+			}
+		}
+	}
+	if (!hasOutgoingConnection) {
+%>
+		globalMap.put("<%=cid %>_URI", aURI<%=cid%>.toString());
+		globalMap.put("<%=cid %>_REDIRECT_URI", aRedirectURI);
+    	globalMap.put("<%=cid %>_HTTP_STATUS_CODE", aStatusCode);
+    	globalMap.put("<%=cid %>_HTTP_STATUS_LINE", aStatusLine);
+		globalMap.put("<%=cid %>_HEADERS", aHeadersList);
+<%
+			if (outputToFile) {
+%>
+    	globalMap.put("<%=cid %>_OUTPUT_FILE", aOutputFilename);
+<%
+			} else {
+%>
+		globalMap.put("<%=cid %>_BODY", aBody);
+<%
+			}
+	}
+%>
+
+		if (aStatusCode >= 400) {
+	    	throw new java.io.IOException(aResponse<%=cid%>.getStatusLine().toString());
+	    }
+    }
+
+} catch (Exception e) {
+<%
+	if (dieOnError) {
+%>
+    throw e;
+<%
+	} else {
+%>
+	e.printStackTrace();
+    System.out.println("\r\n");
+<%
+	}	
+%>
+}
+<%
+	if (!useExistingConnection) {
+%>
+finally {
+	aHttpclient<%=cid%>.getConnectionManager().shutdown();
+}
+<%
+	}
+	// End
+%>

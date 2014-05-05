@@ -1,0 +1,446 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<COMPONENT>
+	<HEADER
+		AUTHOR="Acxio"
+		COMPATIBILITY="ALL"
+		DATA_AUTO_PROPAGATE="false"
+		PLATEFORM="ALL"
+		SCHEMA_AUTO_PROPAGATE="true"
+		SERIAL=""
+		STARTABLE="true"
+		STATUS="ALPHA">
+		<SIGNATURE />
+	</HEADER>
+	
+	<FAMILIES>
+		<FAMILY>Internet/HTTP</FAMILY>
+	</FAMILIES>
+	
+	<DOCUMENTATION>
+		<URL>http://www.acxio.fr</URL>
+	</DOCUMENTATION>
+	
+	<CONNECTORS>
+		<CONNECTOR CTYPE="FLOW" MAX_OUTPUT="1" MAX_INPUT="1" />
+		<CONNECTOR CTYPE="ITERATE" MAX_OUTPUT="1" MAX_INPUT="1"/>
+		<CONNECTOR CTYPE="SUBJOB_OK" MAX_INPUT="1" />
+	    <CONNECTOR CTYPE="SUBJOB_ERROR" MAX_INPUT="1" />
+	    <CONNECTOR CTYPE="COMPONENT_OK"/>
+	    <CONNECTOR CTYPE="COMPONENT_ERROR"/>
+	    <CONNECTOR CTYPE="RUN_IF"/>
+	</CONNECTORS>
+	
+	<PARAMETERS>
+	    <PARAMETER NAME="SCHEMA" FIELD="SCHEMA_TYPE" REQUIRED="true" NUM_ROW="1" READONLY="true">
+			<TABLE READONLY="true">
+				<COLUMN NAME="URI" TYPE="id_String" READONLY="true" />
+				<COLUMN NAME="REDIRECT_URI" TYPE="id_String" READONLY="true" CUSTOM="true" />
+				<COLUMN NAME="STATUS_CODE" TYPE="id_Integer" READONLY="true" CUSTOM="true" />
+				<COLUMN NAME="STATUS_LINE" TYPE="id_String" READONLY="true" CUSTOM="true" />
+				<COLUMN NAME="HEADERS" TYPE="id_List" READONLY="true" CUSTOM="true" />
+				<COLUMN NAME="BODY" TYPE="id_String" READONLY="true" CUSTOM="true" />
+				<COLUMN NAME="FILENAME" TYPE="id_String" READONLY="true" CUSTOM="true" />
+			</TABLE>
+		</PARAMETER>
+	
+		<PARAMETER
+			NAME="HTTP_METHOD"
+			FIELD="CLOSED_LIST"
+			NUM_ROW="2">
+			
+			<ITEMS DEFAULT="HTTP_GET">
+		        <ITEM NAME="HTTP_GET" VALUE="GET" />
+		        <ITEM NAME="HTTP_HEAD" VALUE="HEAD" />
+		        <ITEM NAME="HTTP_POST" VALUE="POST" />
+		        <ITEM NAME="HTTP_PUT" VALUE="PUT" />
+		        <ITEM NAME="HTTP_DELETE" VALUE="DELETE" />
+		        <ITEM NAME="HTTP_TRACE" VALUE="TRACE" />
+		        <ITEM NAME="HTTP_OPTIONS" VALUE="OPTIONS" />
+      		</ITEMS>
+		</PARAMETER>
+		
+		<PARAMETER
+		     NAME="URI"
+		     FIELD="TEXT"
+		     REQUIRED="true"
+		     NUM_ROW="3"
+		  >
+		   <DEFAULT>"http://localhost/service"</DEFAULT>
+		</PARAMETER>
+		
+		<PARAMETER
+	      NAME="OUTPUT_TO_FILE"
+	      FIELD="CHECK"
+	      NUM_ROW="4"
+	    >
+	      <DEFAULT>true</DEFAULT>
+	    </PARAMETER>
+		
+		<PARAMETER
+		     NAME="OUTPUT_FILE"
+		     FIELD="FILE"
+		     REQUIRED="false"
+		     NUM_ROW="5"
+			 SHOW_IF="OUTPUT_TO_FILE == 'true'"
+		  >
+		   <DEFAULT>"__COMP_DEFAULT_FILE_DIR__/out.txt"</DEFAULT>
+		</PARAMETER>
+		
+		<PARAMETER
+		     NAME="CONTENT_ENCODING"
+		     FIELD="ENCODING_TYPE"
+		     NUM_ROW="10"
+		  >
+		   <DEFAULT>"UTF-8"</DEFAULT>
+		</PARAMETER>
+		
+		<PARAMETER
+	      NAME="MULTIPART_FORMDATA"
+	      FIELD="CHECK"
+	      NUM_ROW="11"
+	      SHOW_IF="(HAS_RAWCONTENT == 'false') AND (HTTP_METHOD == 'HTTP_POST') AND (HAS_FILES == 'false')"
+	    >
+	      <DEFAULT>false</DEFAULT>
+	    </PARAMETER>
+		
+		<PARAMETER
+	      NAME="USE_EXISTING_CONNECTION"
+	      FIELD="CHECK"
+	      NUM_ROW="12"
+	    >
+	      <DEFAULT>false</DEFAULT>
+	    </PARAMETER>
+	
+	    <PARAMETER
+	      NAME="CONNECTION"
+	      FIELD="COMPONENT_LIST"
+	      FILTER="tRESTConnection"
+	      NUM_ROW="12"
+	      SHOW_IF="USE_EXISTING_CONNECTION == 'true'"
+	      DYNAMIC_SETTINGS="true"
+	    />
+		
+		<PARAMETER 
+			NAME="HAS_HEADERS"
+			FIELD="CHECK" 
+			REQUIRED="true"
+			NUM_ROW="20"
+		 >
+			<DEFAULT>false</DEFAULT>
+		</PARAMETER>
+		
+		<PARAMETER 
+	      NAME="HTTP_HEADERS" 
+	      FIELD="TABLE" 
+	      NUM_ROW="21"
+	      SHOW_IF="HAS_HEADERS == 'true'"
+	      NB_LINES="4"
+	    >
+	      <ITEMS>
+	        <ITEM NAME="HTTP_HEADERS_NAME" />
+	        <ITEM NAME="HTTP_HEADERS_VALUE"/>
+	        <ITEM NAME="HTTP_HEADERS_ENCODE" FIELD="CHECK" VALUE="false" />
+	      </ITEMS>
+	    </PARAMETER> 
+	    
+	    <PARAMETER 
+			NAME="HAS_RAWCONTENT"
+			FIELD="CHECK" 
+			REQUIRED="true"
+			NUM_ROW="25"
+			SHOW_IF="(HTTP_METHOD == 'HTTP_POST') OR (HTTP_METHOD == 'HTTP_PUT')"
+		 >
+			<DEFAULT>false</DEFAULT>
+		</PARAMETER>
+		
+		<PARAMETER
+		     NAME="RAWCONTENT_MIMETYPE"
+		     FIELD="TEXT"
+		     NUM_ROW="26"
+		     SHOW_IF="(HAS_RAWCONTENT == 'true') AND ((HTTP_METHOD == 'HTTP_POST') OR (HTTP_METHOD == 'HTTP_PUT'))"
+		  >
+		   <DEFAULT>""</DEFAULT>
+		</PARAMETER>
+		
+		<PARAMETER
+		     NAME="RAWCONTENT_FILE"
+		     FIELD="FILE"
+		     REQUIRED="false"
+		     NUM_ROW="27"
+		     SHOW_IF="(HAS_RAWCONTENT == 'true') AND ((HTTP_METHOD == 'HTTP_POST') OR (HTTP_METHOD == 'HTTP_PUT'))"
+		  >
+		</PARAMETER>
+		
+		<PARAMETER
+			NAME="RAWCONTENT"
+			FIELD="MEMO"
+			REQUIRED="false"
+			NUM_ROW="28"
+			SHOW_IF="(HAS_RAWCONTENT == 'true') AND ((HTTP_METHOD == 'HTTP_POST') OR (HTTP_METHOD == 'HTTP_PUT'))"
+			NB_LINES="5"
+		>
+			<DEFAULT>""</DEFAULT>
+		</PARAMETER>
+		
+		<PARAMETER 
+			NAME="HAS_PARAMS"
+			FIELD="CHECK" 
+			REQUIRED="true"
+			NUM_ROW="30"
+		 >
+			<DEFAULT>false</DEFAULT>
+		</PARAMETER>
+		
+		<PARAMETER 
+	      NAME="HTTP_PARAMS" 
+	      FIELD="TABLE" 
+	      NUM_ROW="31"
+	      SHOW_IF="HAS_PARAMS == 'true'"
+	      NB_LINES="8"
+	    >
+	      <ITEMS>
+	        <ITEM NAME="HTTP_PARAMS_NAME" />
+	        <ITEM NAME="HTTP_PARAMS_VALUE"/>
+	        <ITEM NAME="HTTP_PARAMS_ENCODE" FIELD="CHECK" VALUE="true" />
+	        <ITEM NAME="HTTP_PARAMS_URL" FIELD="CHECK" VALUE="true" />
+	        <ITEM NAME="HTTP_PARAMS_FORM" FIELD="CHECK" VALUE="false" SHOW_IF="(HAS_RAWCONTENT == 'false') AND (HTTP_METHOD == 'HTTP_POST')" />
+	      </ITEMS>
+	    </PARAMETER>
+	    
+	    <PARAMETER 
+			NAME="HAS_FILES"
+			FIELD="CHECK" 
+			REQUIRED="true"
+			NUM_ROW="35"
+			SHOW_IF="(HAS_RAWCONTENT == 'false') AND (HTTP_METHOD == 'HTTP_POST')"
+		 >
+			<DEFAULT>false</DEFAULT>
+		</PARAMETER>
+	    
+	    <PARAMETER 
+	      NAME="HTTP_FILES" 
+	      FIELD="TABLE" 
+	      NUM_ROW="36"
+	      SHOW_IF="(HAS_FILES == 'true') AND (HAS_RAWCONTENT == 'false') AND (HTTP_METHOD == 'HTTP_POST')"
+	      NB_LINES="4"
+	    >
+	      <ITEMS>
+	        <ITEM NAME="HTTP_FILES_PATH" FIELD="FILE"/>
+	        <ITEM NAME="HTTP_FILES_PARAM"/>
+	        <ITEM NAME="HTTP_FILES_MIMETYPE"/>
+	      </ITEMS>
+	    </PARAMETER>
+		
+		<PARAMETER
+		  NAME="DIE_ON_ERROR"
+		  FIELD="CHECK"
+		  NUM_ROW="50"
+		>
+			<DEFAULT>true</DEFAULT> 
+		</PARAMETER>   
+		
+	</PARAMETERS>
+	
+	<ADVANCED_PARAMETERS>
+	
+		<PARAMETER
+	      NAME="TIMEOUT"
+	      FIELD="TEXT"
+	      REQUIRED="false"
+	      NUM_ROW="5"
+	      SHOW_IF="USE_EXISTING_CONNECTION == 'false'"
+	    >
+	      <DEFAULT>1000</DEFAULT>
+	    </PARAMETER>
+	    
+		<PARAMETER
+	      NAME="FOLLOW_REDIRECT"
+	      FIELD="CHECK"
+	      REQUIRED="true"
+	      NUM_ROW="6"
+	      SHOW_IF="USE_EXISTING_CONNECTION == 'false'"
+	    >
+	      <DEFAULT>true</DEFAULT>
+	    </PARAMETER>
+	    
+	    <PARAMETER 
+	       NAME="USE_PROXY" 
+	       FIELD="CHECK" 
+	       REQUIRED="true"
+		   NUM_ROW="30" 
+		   REPOSITORY_VALUE="USE_PROXY"
+		   SHOW_IF="USE_EXISTING_CONNECTION == 'false'"
+		>
+		   <DEFAULT>false</DEFAULT>
+		</PARAMETER>
+		
+		<PARAMETER 
+			NAME="PROXY_HOST" 
+			FIELD="TEXT"
+			NUM_ROW="35"
+			SHOW_IF="(USE_EXISTING_CONNECTION == 'false') AND (USE_PROXY == 'true')" 
+			REPOSITORY_VALUE="PROXY_HOST"
+		>
+			<DEFAULT>"192.168.0.1"</DEFAULT>
+		</PARAMETER>
+	
+		<PARAMETER 
+			NAME="PROXY_PORT" 
+			FIELD="TEXT"
+			NUM_ROW="36" 
+			SHOW_IF="(USE_EXISTING_CONNECTION == 'false') AND (USE_PROXY == 'true')" 
+			REPOSITORY_VALUE="PROXY_PORT"
+		>
+			<DEFAULT>8080</DEFAULT>
+		</PARAMETER>
+		
+		<PARAMETER 
+			NAME="PROXY_USERNAME" 
+			FIELD="TEXT" 
+			NUM_ROW="37" 
+			SHOW_IF="(USE_EXISTING_CONNECTION == 'false') AND (USE_PROXY == 'true')" 
+			REPOSITORY_VALUE="PROXY_USERNAME"
+		>
+			<DEFAULT>""</DEFAULT>
+		</PARAMETER>
+		
+		<PARAMETER 
+			NAME="PROXY_PASSWORD" 
+			FIELD="TEXT"
+			NUM_ROW="38" 
+			SHOW_IF="(USE_EXISTING_CONNECTION == 'false') AND (USE_PROXY == 'true')" 
+			REPOSITORY_VALUE="PROXY_PASSWORD"
+		>
+			<DEFAULT>""</DEFAULT>
+		</PARAMETER>
+	
+		<PARAMETER 
+			NAME="PROXY_NTLM"
+			FIELD="CHECK" 
+			NUM_ROW="39"
+			SHOW_IF="(USE_EXISTING_CONNECTION == 'false') AND (USE_PROXY == 'true')" 
+			REPOSITORY_VALUE="PROXY_NTLM"
+		 >
+			<DEFAULT>""</DEFAULT>
+		</PARAMETER>
+	
+		<PARAMETER 
+			NAME="PROXY_WORKSTATION" 
+			FIELD="TEXT"
+			NUM_ROW="40" 
+			SHOW_IF="(USE_EXISTING_CONNECTION == 'false') AND (USE_PROXY == 'true') AND (PROXY_NTLM == 'true')" 
+			REPOSITORY_VALUE="PROXY_WORKSTATION"
+	        >
+			<DEFAULT>""</DEFAULT>
+		</PARAMETER>
+		
+		<PARAMETER 
+			NAME="PROXY_DOMAIN" 
+			FIELD="TEXT"
+			NUM_ROW="41" 
+			SHOW_IF="(USE_EXISTING_CONNECTION == 'false') AND (USE_PROXY == 'true') AND (PROXY_NTLM == 'true')" 
+			REPOSITORY_VALUE="PROXY_DOMAIN"
+	        >
+			<DEFAULT>""</DEFAULT>
+		</PARAMETER>
+		
+		<PARAMETER 
+			NAME="NEED_AUTH"
+			FIELD="CHECK" 
+			REQUIRED="true"
+			NUM_ROW="45"
+		 >
+			<DEFAULT>false</DEFAULT>
+		</PARAMETER>
+	    
+	    <PARAMETER
+	      NAME="AUTH_USERNAME"
+	      FIELD="TEXT"
+	      REQUIRED="false"
+	      NUM_ROW="50"
+	      SHOW_IF="NEED_AUTH == 'true'"
+	    >
+	      <DEFAULT>"username"</DEFAULT>
+	    </PARAMETER>
+	    
+	    <PARAMETER
+	      NAME="AUTH_PASSWORD"
+	      FIELD="TEXT"
+	      REQUIRED="false"
+	      NUM_ROW="50"
+	      SHOW_IF="NEED_AUTH == 'true'"
+	    >
+	      <DEFAULT>"password"</DEFAULT>
+	    </PARAMETER>
+	    
+	    <PARAMETER
+	      NAME="AUTH_REALM"
+	      FIELD="TEXT"
+	      REQUIRED="false"
+	      NUM_ROW="51"
+	      SHOW_IF="NEED_AUTH == 'true'"
+	    >
+	      <DEFAULT>""</DEFAULT>
+	    </PARAMETER>
+	    
+	    <PARAMETER 
+			NAME="NEED_TRUSTSTORE"
+			FIELD="CHECK" 
+			REQUIRED="true"
+			NUM_ROW="60"
+			SHOW_IF="(USE_EXISTING_CONNECTION == 'false')"
+		 >
+			<DEFAULT>false</DEFAULT>
+		</PARAMETER>
+		
+		<PARAMETER 
+			NAME="SSL_TRUSTSTORE_TYPE"
+			FIELD="CLOSED_LIST"
+			REQUIRED="false"
+			NUM_ROW="61"
+			SHOW_IF="(USE_EXISTING_CONNECTION == 'false') AND (NEED_TRUSTSTORE == 'true')"
+		 >
+			<ITEMS DEFAULT="JKS">
+		        <ITEM NAME="JKS" VALUE="JKS" />
+		        <ITEM NAME="PKCS12" VALUE="PKCS12" />
+		        <ITEM NAME="Windows-MY" VALUE="Windows-MY" />
+		        <ITEM NAME="Windows-ROOT" VALUE="Windows-ROOT" />
+      		</ITEMS>
+		</PARAMETER>
+		
+		<PARAMETER 
+			NAME="SSL_TRUSTSTORE"
+			FIELD="FILE" 
+			REQUIRED="false"
+			NUM_ROW="62"
+			SHOW_IF="(USE_EXISTING_CONNECTION == 'false') AND (NEED_TRUSTSTORE == 'true') AND (SSL_TRUSTSTORE_TYPE != 'Windows-MY')  AND (SSL_TRUSTSTORE_TYPE != 'Windows-ROOT')"
+		 >
+		</PARAMETER>
+		
+		<PARAMETER
+	      NAME="SSL_TRUSTSTORE_PASSWORD"
+	      FIELD="TEXT"
+	      REQUIRED="false"
+	      NUM_ROW="63"
+	      SHOW_IF="(USE_EXISTING_CONNECTION == 'false') AND (NEED_TRUSTSTORE == 'true') AND (SSL_TRUSTSTORE_TYPE != 'Windows-MY')  AND (SSL_TRUSTSTORE_TYPE != 'Windows-ROOT')"
+	    >
+	      <DEFAULT>""</DEFAULT>
+	    </PARAMETER>
+	    
+	</ADVANCED_PARAMETERS>
+	
+	<CODEGENERATION>
+		<IMPORTS>
+		</IMPORTS>
+	</CODEGENERATION>
+	
+	<RETURNS>
+		<RETURN NAME="URI" TYPE="id_String" AVAILABILITY="AFTER" />
+		<RETURN NAME="REDIRECT_URI" TYPE="id_String" AVAILABILITY="AFTER" />
+		<RETURN NAME="HTTP_STATUS_CODE" TYPE="id_Integer" AVAILABILITY="AFTER" />
+		<RETURN NAME="HTTP_STATUS_LINE" TYPE="id_String" AVAILABILITY="AFTER" />
+		<RETURN NAME="HEADERS" TYPE="id_List" AVAILABILITY="AFTER" />
+		<RETURN NAME="BODY" TYPE="id_String" AVAILABILITY="AFTER" />
+		<RETURN NAME="OUTPUT_FILE" TYPE="id_String" AVAILABILITY="AFTER" />
+	</RETURNS>
+</COMPONENT>

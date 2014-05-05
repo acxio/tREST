@@ -1,0 +1,141 @@
+<%@ jet 
+	imports="
+		org.talend.core.model.process.INode 
+		org.talend.core.model.process.ElementParameterParser 
+		org.talend.core.model.metadata.IMetadataTable 
+		org.talend.core.model.metadata.IMetadataColumn 
+		org.talend.core.model.process.IConnection
+		org.talend.core.model.process.IConnectionCategory
+		org.talend.designer.codegen.config.CodeGeneratorArgument
+		org.talend.core.model.metadata.types.JavaTypesManager
+		org.talend.core.model.metadata.types.JavaType
+		java.util.List 
+    	java.util.Map
+    	java.net.InetAddress
+    	java.net.UnknownHostException
+	" 
+%>
+<% 
+    CodeGeneratorArgument codeGenArgument = (CodeGeneratorArgument) argument;
+    INode node = (INode)codeGenArgument.getArgument();
+    String cid = node.getUniqueName();
+    
+    // Basic parameters
+    
+    boolean useExistingConnectionMgr = ("true").equals(ElementParameterParser.getValue(node,"__USE_EXISTING_CONNECTION_MANAGER__"));
+    String connectionMgr = ElementParameterParser.getValue(node,"__CONNECTION_MANAGER__");
+    String connmgr = "httpconnmgr_" + connectionMgr;
+    
+        String timeoutStr = ElementParameterParser.getValue(node,"__TIMEOUT__");
+	Integer timeout = Integer.valueOf(2000);
+	try {
+    	timeout = Integer.parseInt(timeoutStr);
+    } catch (NumberFormatException e) {
+    	timeout = Integer.valueOf(2000);
+    }
+	
+	boolean followRedirect = ("true").equals(ElementParameterParser.getValue(node,"__FOLLOW_REDIRECT__"));
+        
+    boolean useProxy = ("true").equals(ElementParameterParser.getValue(node,"__USE_PROXY__"));
+    String proxyHost = ElementParameterParser.getValue(node,"__PROXY_HOST__");
+    String proxyPortStr = ElementParameterParser.getValue(node,"__PROXY_PORT__");
+    int proxyPort = -1;
+    try {
+    	proxyPort = Integer.parseInt(proxyPortStr);
+    } catch (NumberFormatException e) {
+    	proxyPort = -1;
+    }
+    String proxyUser = ElementParameterParser.getValue(node,"__PROXY_USERNAME__");
+    String proxyPassword = ElementParameterParser.getValue(node,"__PROXY_PASSWORD__");
+    boolean proxyNTLM = ("true").equals(ElementParameterParser.getValue(node,"__PROXY_NTLM__"));
+    String proxyWorkstation = ElementParameterParser.getValue(node,"__PROXY_WORKSTATION__");
+    if ((proxyWorkstation == null) || proxyWorkstation.isEmpty() || "\"\"".equals(proxyWorkstation)) {
+    	try {
+    		InetAddress addr = InetAddress.getLocalHost();
+    		proxyWorkstation = new StringBuilder().append("\"").append(addr.getHostName()).append("\"").toString();
+    	} catch (UnknownHostException e) {
+    		proxyWorkstation = "\"\"";
+    	} 
+    }
+    String proxyDomain = ElementParameterParser.getValue(node,"__PROXY_DOMAIN__");
+    
+    boolean needTrustStore = ("true").equals(ElementParameterParser.getValue(node,"__NEED_TRUSTSTORE__"));
+    String trustStoreType = ElementParameterParser.getValue(node,"__SSL_TRUSTSTORE_TYPE__");
+    String trustStoreFilename = ElementParameterParser.getValue(node,"__SSL_TRUSTSTORE__");
+    String trustStorePassword = ElementParameterParser.getValue(node,"__SSL_TRUSTSTORE_PASSWORD__");
+
+// HTTP protocole parameters (NOT request parameters)
+%>
+
+org.apache.http.params.BasicHttpParams aHttpParams_<%=cid%> = new org.apache.http.params.BasicHttpParams();
+aHttpParams_<%=cid%>.setParameter(org.apache.http.client.params.AllClientPNames.CONNECTION_TIMEOUT, <%=timeout%>);
+aHttpParams_<%=cid%>.setBooleanParameter(org.apache.http.client.params.AllClientPNames.HANDLE_REDIRECTS, <%=followRedirect%>);
+
+<%
+	if (useProxy) {
+%>
+org.apache.http.HttpHost aProxy_<%=cid%> = new org.apache.http.HttpHost(<%=proxyHost%>, <%=proxyPort%>);
+aHttpParams_<%=cid%>.setParameter(org.apache.http.client.params.AllClientPNames.DEFAULT_PROXY, aProxy_<%=cid%>);
+<%
+	}
+%>
+
+org.apache.http.impl.client.DefaultHttpClient aHttpclient_<%=cid%> = new org.apache.http.impl.client.DefaultHttpClient(
+<%
+	if (useExistingConnectionMgr) {
+%>
+	(org.apache.http.conn.ClientConnectionManager)globalMap.get("<%=connmgr%>"),
+<%
+	}
+%>
+aHttpParams_<%=cid%>);
+
+<%
+	if (needTrustStore) {
+%>
+
+	java.security.KeyStore trustStore_<%=cid%>  = java.security.KeyStore.getInstance("<%=trustStoreType%>");
+<%
+		if (!trustStoreType.startsWith("Windows-")) {
+%>
+	java.io.FileInputStream trustStoreInstream_<%=cid%> = new java.io.FileInputStream(new java.io.File(<%=trustStoreFilename%>)); 
+	try {
+		trustStore_<%=cid%>.load(trustStoreInstream_<%=cid%>, <%=trustStorePassword%>.toCharArray());
+	} catch (IOException ioe) {
+		// Fall back to default TrustStore
+		System.out.println("Cannot load TrustStore");
+	} finally {
+		trustStoreInstream_<%=cid%>.close();
+	}
+<%
+		} else {
+%>
+	trustStore_<%=cid%>.load(null, null);
+<%
+		}
+%>
+	org.apache.http.conn.ssl.SSLSocketFactory socketFactory_<%=cid%> = new org.apache.http.conn.ssl.SSLSocketFactory(trustStore_<%=cid%>);
+	org.apache.http.conn.scheme.Scheme sch_<%=cid%> = new org.apache.http.conn.scheme.Scheme("https", 443, socketFactory_<%=cid%>);
+	aHttpclient_<%=cid%>.getConnectionManager().getSchemeRegistry().register(sch_<%=cid%>);
+<%
+	}
+
+	if (useProxy && (proxyUser != null) && !proxyUser.isEmpty()) {
+		if (proxyNTLM) {
+%>
+	org.apache.http.auth.Credentials aProxyCredentials_<%=cid%> = new org.apache.http.auth.NTCredentials(<%=proxyUser%>, <%=proxyPassword%>, <%=proxyWorkstation%>, <%=proxyDomain%>);
+<%
+		} else {
+%>
+	org.apache.http.auth.Credentials aProxyCredentials_<%=cid%> = new org.apache.http.auth.UsernamePasswordCredentials(<%=proxyUser%>, <%=proxyPassword%>);
+<%
+		}
+%>
+	aHttpclient_<%=cid%>.getCredentialsProvider().setCredentials(new org.apache.http.auth.AuthScope(<%=proxyHost%>, <%=proxyPort%>), aProxyCredentials_<%=cid%>);
+<%
+	}
+%>
+org.apache.http.protocol.SyncBasicHttpContext aHttpContext_<%=cid%> = new org.apache.http.protocol.SyncBasicHttpContext(new org.apache.http.protocol.BasicHttpContext());
+
+globalMap.put("httpconn_<%=cid%>", aHttpclient_<%=cid%>);
+globalMap.put("httpcontext_<%=cid%>", aHttpContext_<%=cid%>);
